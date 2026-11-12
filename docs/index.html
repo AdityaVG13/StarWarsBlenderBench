@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Star Wars Blender Bench: Models at war</title>
+<meta name="description" content="An open benchmark: AI models rebuild Star Wars battles in Blender, timed, first try. New models tested as they land. Watch every bout.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #04060b;
+    --ink: #f4f6f8;
+    --muted: #9aa7b4;
+    --paper: #4fd8ff;
+    --paper-ink: #04060b;
+    --blood: #b01616;
+    --blood-ink: #ffffff;
+    --panel: #0e141f;
+    --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+    --step-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+    --step-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+    --margin: clamp(16px, 3vw, 28px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "Epilogue", "Arial Black", sans-serif; font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--paper); color: var(--paper-ink); }
+  .display { font-weight: 900; letter-spacing: -0.04em; line-height: 0.85; text-transform: uppercase; text-wrap: balance; }
+
+  /* ---------- nav ---------- */
+  nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px var(--margin); background: var(--panel);
+  }
+  nav .mark { font-weight: 900; font-size: 20px; letter-spacing: -0.02em; }
+  nav .links { display: flex; gap: 26px; }
+  nav a { color: var(--ink); text-decoration: none; font-weight: 500; font-size: 16px; }
+
+  /* ---------- hero ---------- */
+  .hero { background: var(--panel); color: var(--ink); padding: 0 var(--margin); position: relative; overflow: hidden; }
+  .hero h1 {
+    margin: 0; padding-top: 1vh; font-size: clamp(60px, 7.5vw, 124px);
+    position: relative; z-index: 1;
+  }
+  .hero h1 .line { display: block; overflow: hidden; }
+  .hero h1 .line > span { display: block; animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .hero h1 .line:nth-child(2) > span { animation-delay: 0.11s; }
+  @keyframes rise { from { transform: translateY(110%); } to { transform: translateY(0); } }
+
+  .hero-grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px;
+    align-items: start; padding-bottom: 6vh; margin-top: 3vh;
+  }
+  .hero-left { align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+  .hero-band { margin-top: 30px; }
+  .hero-band {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
+  }
+  .hero-band p { margin: 0; font-size: 20px; line-height: 1.5; }
+  .btn {
+    display: inline-block; background: var(--paper); color: var(--paper-ink);
+    font-weight: 900; font-size: 18px; text-transform: uppercase; letter-spacing: -0.01em;
+    padding: 18px 34px; text-decoration: none; border-radius: 0; white-space: nowrap;
+  }
+  .btn:hover { background: var(--ink); color: var(--ground); }
+  .btn:focus-visible, nav a:focus-visible, .bout:focus-visible { outline: 3px solid var(--blood); outline-offset: 3px; }
+
+  /* ---------- player ---------- */
+  .screen { background: transparent; padding: 0; }
+  .screen .frame { aspect-ratio: 16/9; width: 100%; background: #000; position: relative; }
+  .screen .frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .poster { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+  .poster img { width: 100%; height: 100%; object-fit: cover; object-position: center 65%; display: block; animation: drift 24s ease-in-out infinite alternate; }
+  @keyframes drift { from { transform: scale(1); } to { transform: scale(1.07); } }
+  .poster .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .poster .play span {
+    display: flex; align-items: center; justify-content: center;
+    width: clamp(72px, 7vw, 104px); height: clamp(72px, 7vw, 104px); flex: none;
+    background: var(--paper); color: var(--paper-ink);
+    font-size: clamp(26px, 2.6vw, 38px); font-weight: 900; transition: transform 0.15s ease;
+  }
+  .poster .tag {
+    position: absolute; left: 12px; top: 12px; background: var(--paper); color: var(--paper-ink);
+    font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em;
+    font-size: 15px; padding: 12px 20px;
+  }
+  .poster:hover .play span { transform: scale(1.06); }
+  .now { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; margin-top: 20px; }
+  .now h2 { margin: 0; font-size: clamp(22px, 2.4vw, 34px); color: var(--ink); }
+  .now p { margin: 0; color: #9aa7b4; font-size: 17px; font-weight: 500; }
+
+  /* ---------- showcase statement ---------- */
+  .creed { background: var(--ground); padding: 110px var(--margin); overflow: hidden; }
+  .creed .wl { font-size: clamp(48px, 6.5vw, 110px); position: relative; z-index: 1; white-space: nowrap; }
+  .creed .dim18 { color: #c9c9c9; }
+  .creed .dim45 { color: #cfcfcf; }
+  .creed img { display: block; width: 100%; max-width: 880px; aspect-ratio: 16/10; object-fit: cover; margin: 40px 0 0 auto; }
+  .creed .facts { margin: 40px auto 0 0; max-width: 560px; font-size: 20px; line-height: 1.5; }
+  .creed .facts p { margin: 0 0 18px; }
+  .creed .facts strong { font-weight: 500; color: var(--paper); }
+  @media (min-width: 1000px) {
+    .creed { display: grid; grid-template-columns: 7fr 5fr; gap: 0 32px; align-items: stretch; }
+    .creed .wl { grid-column: 1; }
+    .creed img {
+      grid-column: 2; grid-row: 1 / span 4; width: 100%; height: 100%; object-fit: cover;
+      margin: 0; transform: none;
+    }
+    .creed .facts { grid-column: 1; margin: 48px 0 0; }
+  }
+
+  /* ---------- fight card ---------- */
+  .card { background: var(--panel); color: var(--ink); padding: 96px var(--margin); }
+  .card h2 { margin: 0 0 50px; font-size: clamp(48px, 7vw, 110px); }
+  #bouts { display: grid; gap: 4px; }
+  .bout {
+    display: grid; grid-template-columns: auto 4fr 5fr 2fr; gap: 12px 28px; align-items: center;
+    padding: 18px 0; color: var(--ink); text-decoration: none;
+    background: none; border: 0; font: inherit; text-align: left; cursor: pointer;
+  }
+  .bout .thumb { width: clamp(120px, 14vw, 220px); aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .bout .battle { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; font-size: clamp(20px, 2.6vw, 38px); line-height: 1; }
+  .bout .model { font-size: 20px; font-weight: 500; }
+  .bout .tested { display: block; font-size: 15px; font-weight: 400; color: #9aa7b4; margin-top: 6px; }
+  .bout:hover .tested, .bout[aria-current="true"] .tested { color: var(--paper-ink); }
+  .bout .time { font-size: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+  .bout:hover { background: var(--paper); }
+  .bout:hover .battle, .bout:hover .model, .bout:hover .time { color: var(--paper-ink); }
+  .bout[aria-current="true"] { background: var(--paper); }
+  .bout[aria-current="true"] .battle, .bout[aria-current="true"] .model, .bout[aria-current="true"] .time { color: var(--paper-ink); }
+
+  /* ---------- rules ---------- */
+  .rules { background: var(--blood); color: var(--blood-ink); padding: 96px var(--margin); }
+  .rules h2 { margin: 0 0 50px; font-size: clamp(48px, 7vw, 110px); }
+  .rule-grid { display: grid; grid-template-columns: 34% 1fr; gap: 32px; }
+  .rule-grid .k { font-weight: 900; text-transform: uppercase; font-size: clamp(20px, 2.4vw, 34px); letter-spacing: -0.02em; line-height: 1; }
+  .rule-grid .v { font-size: 21px; line-height: 1.45; max-width: 44ch; margin: 0; }
+
+  /* ---------- footer ---------- */
+  footer { background: var(--ground); padding: 110px var(--margin) 40px; }
+  footer .bout-note { font-size: 21px; line-height: 1.5; max-width: 52ch; margin: 0 0 64px; color: var(--ink); }
+  .bigmark { display: flex; gap: 4px; align-items: flex-end; margin-bottom: 56px; }
+  .bigmark span {
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; color: var(--ground); font-size: clamp(40px, 8vw, 110px); line-height: 1;
+  }
+  .bigmark .b1 { background: var(--paper); width: 1.1em; height: 1.5em; }
+  .bigmark .b2 { background: var(--blood); width: 1.1em; height: 1.1em; color: var(--blood-ink); }
+  .bigmark .b3 { background: var(--paper); width: 1.1em; height: 1.7em; }
+  .bigmark .b4 { background: #3a3a3a; width: 1.1em; height: 1.3em; color: var(--ink); }
+  .foot-grid { display: flex; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+  .foot-grid .links { display: flex; gap: 28px; flex-wrap: wrap; }
+  .foot-grid a { color: var(--ink); font-size: 15px; text-decoration: none; font-weight: 500; }
+  .foot-grid a:hover { color: var(--paper); }
+  .fine { color: #a3a3a3; font-size: 13px; margin-top: 40px; max-width: 70ch; line-height: 1.6; }
+
+  /* ---------- entrance motion ---------- */
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  html.anim .rise { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  html.anim .rise.in { opacity: 1; transform: none; }
+
+  @media (max-width: 760px) {
+    .hero h1 { font-size: 13.5vw; padding-top: 2vh; }
+    nav .links { gap: 18px; }
+    nav a { font-size: 14px; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .hero-band .btn { text-align: center; align-self: stretch; }
+    .creed .wl { font-size: 11vw; }
+    .creed img { position: relative; right: auto; top: auto; width: 78%; margin: 32px 0 0 auto; display: block; }
+    .bout { grid-template-columns: 1fr; gap: 8px; }
+    .bout .thumb { width: 100%; max-height: 140px; }
+    .bout .time { text-align: left; }
+    .rule-grid { grid-template-columns: 1fr; gap: 6px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero h1 .line > span { animation: none; }
+    .poster img { animation: none; }
+    .rise { opacity: 1; transform: none; transition: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="mark">SWBB</div>
+  <div class="links">
+    <a href="#watch">Watch</a>
+    <a href="#card">Fight card</a>
+    <a href="#rules">Rules</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-grid">
+   <div class="hero-left">
+    <h1 class="display"><span class="line"><span>Models</span></span> <span class="line"><span>at war</span></span></h1>
+    <div class="hero-band">
+      <p>An open benchmark: AI models rebuild a Star Wars battle in Blender. Timed, first try, new models tested as they land.</p>
+      <a class="btn" href="#card">See the fight card</a>
+    </div>
+   </div>
+    <section class="screen" id="watch" aria-label="Featured bout player">
+      <div class="frame" id="frame"></div>
+      <div class="now">
+        <h2 class="display" id="now-battle">Fable 5.2 xHigh</h2>
+        <p id="now-meta">Geonosis · 1h 30m · Oct 2026 · attempt 1</p>
+      </div>
+    </section>
+  </div>
+</header>
+
+<section class="creed">
+  <div class="wl display rise dim45" style="transition-delay:0ms">Every model.</div>
+  <div class="wl display rise" style="transition-delay:90ms">One battle.</div>
+  <div class="wl display rise dim18" style="transition-delay:180ms">First try.</div>
+  <img class="rise" src="stills/naboo.jpg" alt="Reconstruction frame: droid battalions massing on the Naboo plain" width="1120" height="700" loading="lazy">
+  <div class="facts rise">
+    <h3 class="vh">What the bench is</h3>
+    <p><strong>One run per model per battle,</strong> timed wall-clock. Twenty minutes at the fast end, nine hours forty-seven at the slow end. Rematches welcome.</p>
+    <p><strong>Built procedurally in Blender.</strong> No downloaded models, no plates. Film frames sat beside the viewport as reference and never entered it.</p>
+  </div>
+</section>
+
+<section class="card" id="card">
+  <h2 class="display rise">The fight card</h2>
+  <div id="bouts"></div>
+</section>
+
+<section class="rules" id="rules">
+  <h2 class="display rise">The rules</h2>
+  <div class="rule-grid rise">
+    <div class="k">Timed</div>
+    <p class="v">The clock runs from a blank .blend to final render. Nothing before counts, nothing after counts.</p>
+  </div>
+  <div style="height:44px"></div>
+  <div class="rule-grid rise">
+    <div class="k">First attempt</div>
+    <p class="v">One run per model per battle. What you watch is what came out, not the tenth take.</p>
+  </div>
+  <div style="height:44px"></div>
+  <div class="rule-grid rise">
+    <div class="k">Built in Blender</div>
+    <p class="v">Every mesh is built in Blender. Film footage is reference, never compositing material.</p>
+  </div>
+  <div style="height:44px"></div>
+  <div class="rule-grid rise">
+    <div class="k">Still running</div>
+    <p class="v">New models get tested as they land, including rematches on past battles, and old ones can re-run. Every bout lists its model and test date, so the card stays comparable.</p>
+  </div>
+</section>
+
+<footer>
+  <p class="bout-note rise">The bench stays open. New battles, new models, new bouts get added to the card as they render.</p>
+  <div class="bigmark rise" aria-label="SWBB">
+    <span class="b1">S</span><span class="b2">W</span><span class="b3">B</span><span class="b4">B</span>
+  </div>
+  <div class="foot-grid">
+    <div class="links">
+      <a href="https://www.youtube.com/@adityavgcode">YouTube channel</a>
+      <a href="https://youtu.be/4W1jZB049jw">Latest bout</a>
+      <a href="https://github.com/AdityaVG13/StarWarsBlenderBench">GitHub</a>
+    </div>
+  </div>
+  <p class="fine">Fan art. Not affiliated with Lucasfilm or Disney. Stills are frames of the reconstructions on this page.</p>
+</footer>
+
+<script>
+const BOUTS = [
+  { id: "4W1jZB049jw", battle: "Geonosis", model: "Fable 5.2 xHigh", time: "1h 30m", tested: "Oct 2026", still: "stills/f-geonosis.jpg", alt: "Jedi surrounded by battle droids in the Geonosis arena as gunships land" },
+  { id: "tq_osUJ2X1M", battle: "Ryloth", model: "GPT 6.1 Terra xHigh", time: "1h 20m", tested: "Oct 2026", still: "stills/f-ryloth.jpg", alt: "Droid army advancing through a canyon on Ryloth" },
+  { id: "lHrlM-nDsoE", battle: "Naboo", model: "Kimi K3.1 Max", time: "1h", tested: "Oct 2026", still: "stills/f-naboo.jpg", alt: "A Trade Federation droid army advancing across the plains of Naboo" },
+  { id: "bV9RV8DgA9M", battle: "Utapau", model: "MiniMax M3.1-Flash", time: "1h 30m", tested: "Oct 2026", still: "stills/f-utapau.jpg", alt: "A clone trooper facing a varactyl rider in the dust of Utapau" },
+  { id: "SzycsGpB5H4", battle: "Christophsis", model: "DeepSeek-v4.1-Flash-1017", time: "1h 30m", tested: "Oct 2026", still: "stills/f-christophsis.jpg", alt: "Clone troopers in the crystal city of Christophsis at sunset" },
+  { id: "2Qfdrq6uEMA", battle: "Coruscant", model: "Opus 5.5", time: "20m", tested: "Oct 2026", still: "stills/f-coruscant.jpg", alt: "A Venator diving over the night grid of Coruscant" },
+  { id: "ZBhaDbmMUYU", battle: "Crait", model: "Opus 5.5", time: "40m", tested: "Oct 2026", still: "stills/f-crait.jpg", alt: "An AT-walker crossing the salt flats of Crait under fire" },
+  { id: "s2xnSy8mUdE", battle: "Starkiller Base", model: "Gemini 4 Carbon High", time: "9h 47m", tested: "Oct 2026", still: "stills/f-starkiller.jpg", alt: "X-wings diving on TIE fighters over Starkiller Base" }
+];
+const wrap = document.getElementById("bouts");
+const frame = document.getElementById("frame");
+const nowBattle = document.getElementById("now-battle");
+const nowMeta = document.getElementById("now-meta");
+let current = -1;
+function showBout(i, autoplay) {
+  const b = BOUTS[i];
+  current = i;
+  nowBattle.textContent = b.model;
+  nowMeta.textContent = b.battle + ' · ' + b.time + ' · ' + b.tested + ' · attempt 1';
+  if (autoplay) {
+    frame.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + b.id + '?rel=0&autoplay=1" title="' + b.battle + ' reconstruction" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+  } else {
+    frame.innerHTML = '<button class="poster" aria-label="Play the ' + b.battle + ' reconstruction"><img src="' + b.still + '" alt="' + b.alt + '"><span class="tag">Bout ' + (i + 1) + ' · ' + b.battle + '</span><span class="play"><span>▶</span></span></button>';
+    frame.querySelector(".poster").addEventListener("click", function () { showBout(i, true); });
+  }
+  wrap.querySelectorAll(".bout").forEach(function (x, j) {
+    if (j === i) x.setAttribute("aria-current", "true");
+    else x.removeAttribute("aria-current");
+  });
+}
+BOUTS.forEach(function (b, i) {
+  const btn = document.createElement("button");
+  btn.className = "bout rise";
+  btn.style.transitionDelay = (i * 60) + "ms";
+  btn.innerHTML = '<span class="thumb-wrap"><img class="thumb" src="' + b.still + '" alt="" width="440" height="248" loading="lazy"></span><span class="battle">' + b.battle + '</span><span class="model">' + b.model + '<span class="tested">Tested ' + b.tested + '</span></span><span class="time">' + b.time + '</span>';
+  btn.addEventListener("click", function () {
+    showBout(i, false);
+    document.getElementById("watch").scrollIntoView();
+  });
+  wrap.appendChild(btn);
+});
+showBout(0, false);
+document.documentElement.classList.add("anim");
+const io = new IntersectionObserver(function (entries) {
+  entries.forEach(function (e) {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll(".rise").forEach(function (el) { io.observe(el); });
+</script>
+</body>
+</html>
